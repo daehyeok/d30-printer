@@ -8,10 +8,15 @@
 
 {
   # https://devenv.sh/packages/
-  packages = with pkgs; [
-    git
-    nixfmt-rfc-style
-  ];
+  packages =
+    with pkgs;
+    [
+      git
+      nixfmt-rfc-style
+    ]
+    ++ lib.optionals stdenv.isLinux [
+      dbus
+    ];
 
   # https://devenv.sh/languages/
   languages = {
