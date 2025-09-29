@@ -1,0 +1,18 @@
+[package]
+name = "d30-printer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+btleplug = {version  ="0.11.8", features=["serde"]}
+clap = { version = "4.5.48", features = ["derive"] }
+dimensions = "0.1.0"
+env_logger = "0.10"
+findfont = "0.2.0"
+image = { version = "0.24.9", features = ["jpeg", "dds"] }
+imageproc = "0.23.0"
+log = "0.4.28"
+pretty_env_logger = "0.5.0"
+rusttype = { version = "0.9.3", features = ["gpu_cache"] }
+tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"]}
