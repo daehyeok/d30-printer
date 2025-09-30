@@ -11,7 +11,6 @@
   packages =
     with pkgs;
     [
-      git
       nixfmt-rfc-style
     ]
     ++ lib.optionals stdenv.isLinux [
@@ -29,7 +28,6 @@
         "clippy"
         "rustfmt"
         "rust-analyzer"
-        "rust-src"
       ];
     };
   };

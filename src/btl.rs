@@ -1,13 +1,15 @@
-use core::time;
-use std::thread;
+use std::time::Duration;
+use tokio::spawn;
+use tokio::time::timeout;
 
 use crate::config::Config;
 use anyhow::{Context, Result, anyhow};
 use btleplug::api::{
-    BDAddr, Central, CharPropFlags, Characteristic, Manager as _, Peripheral as _, ScanFilter,
-    WriteType,
+    BDAddr, Central, CentralEvent, CharPropFlags, Characteristic, Manager as _, Peripheral as _,
+    ScanFilter, WriteType,
 };
 use btleplug::platform::{Adapter, Manager, Peripheral};
+use futures::stream::StreamExt;
 
 pub struct D30 {
     device: Peripheral,
@@ -16,7 +18,7 @@ pub struct D30 {
 
 impl D30 {
     pub async fn new(config: &Config) -> Result<Self> {
-        let device = D30::find_device(config.get_addr()?).await?;
+        let device = D30::find_device(config).await?;
 
         if let Err(e) = device.connect().await.context("Connect to D30 Device.") {
             return Err(anyhow!("Failed to connect to D30: {}", e));
@@ -44,7 +46,41 @@ impl D30 {
         Ok(())
     }
 
-    async fn d30_filter(central: &Adapter, addr: Option<BDAddr>) -> Result<Peripheral> {
+    async fn d30_filter(p: &Peripheral, addr: &Option<BDAddr>) -> bool {
+        let properties_res = p.properties().await;
+
+        if let Err(e) = properties_res {
+            warn!(
+                "Error occured during get bluetooth device properties: {}",
+                e
+            );
+            return false;
+        }
+
+        let properties = properties_res.unwrap();
+        debug!("Found device: {:?}", properties);
+        if properties.is_none() {
+            return false;
+        }
+
+        let properties = properties.unwrap();
+
+        // If execution reaches here, result is Ok, and you can unwrap or expect the value
+        let local_name = properties.local_name.unwrap_or_default();
+        debug!("Found BLE device: {}, {:?}", local_name, properties.address);
+
+        if let Some(d30_addr) = addr {
+            if properties.address == *d30_addr {
+                return true;
+            }
+        } else if local_name == "D30" {
+            return true;
+        }
+
+        false
+    }
+
+    async fn scan(central: Adapter, addr: Option<BDAddr>) -> Result<Peripheral> {
         #[cfg(debug_assertions)]
         {
             let adapter = match central.adapter_info().await {
@@ -55,52 +91,33 @@ impl D30 {
                 }
             };
             debug!("Scanning D30 from adapter: {:?}", adapter);
+
+            let central_state = central.adapter_state().await.unwrap();
+            debug!("CentralState: {:?}", central_state);
         }
 
+        let mut events = central.events().await?;
         info!("Scanning Bluetooth devices");
         central.start_scan(ScanFilter::default()).await?;
 
-        //TODO: change to event driven api.
-        let duration = time::Duration::from_secs(2);
-        info!("Waiting for {} seconds", duration.as_secs_f32());
-        thread::sleep(duration);
-
-        for p in central.peripherals().await? {
-            let properties_res = p.properties().await;
-
-            if let Err(e) = properties_res {
-                warn!(
-                    "Error occured during get bluetooth device properties: {}",
-                    e
-                );
-                continue;
-            }
-
-            let properties = properties_res.unwrap();
-            debug!("Found device: {:?}", properties);
-            if properties.is_none() {
-                continue;
-            }
-
-            let properties = properties.unwrap();
-
-            // If execution reaches here, result is Ok, and you can unwrap or expect the value
-            let local_name = properties.local_name.unwrap_or_default();
-            debug!("Found BLE device: {}, {:?}", local_name, properties.address);
-
-            if let Some(addr) = addr {
-                if properties.address == addr {
-                    return Ok(p);
+        while let Some(event) = events.next().await {
+            match event {
+                CentralEvent::DeviceDiscovered(id) => {
+                    let peripheral = central.peripheral(&id).await?;
+                    if D30::d30_filter(&peripheral, &addr).await {
+                        central.stop_scan().await?;
+                        return Ok(peripheral);
+                    }
                 }
-            } else if local_name == "D30" {
-                return Ok(p);
+                _ => {}
             }
         }
 
+        central.stop_scan().await?;
         Err(anyhow!("Could not find D30."))
     }
 
-    async fn find_device(addr: Option<BDAddr>) -> Result<Peripheral> {
+    async fn find_device(config: &Config) -> Result<Peripheral> {
         let manager = Manager::new().await?;
         info!("Searching for Bluetooth adapters");
         let adapters = manager.adapters().await?;
@@ -109,12 +126,21 @@ impl D30 {
             return Err(anyhow!("Unable to find any adapters."));
         }
 
-        for adapter in adapters {
-            if let Ok(a) = D30::d30_filter(&adapter, addr).await {
-                return Ok(a);
-            }
-        }
+        let adapter = adapters.into_iter().nth(0).unwrap();
 
-        Err(anyhow!("Could not find D30 from any adapter."))
+        let addr = config.get_addr()?;
+        let handle = spawn(async move { D30::scan(adapter, addr).await });
+        let time_limit = Duration::from_secs(5);
+
+        let d30 = timeout(time_limit, handle).await;
+        match d30 {
+            Ok(Ok(Ok(device))) => Ok(device),
+            Ok(Ok(Err(e))) => Err(e),
+            Ok(Err(join_error)) => Err(anyhow!("Task panicked or cancelled: {:?}", join_error)),
+            Err(_) => Err(anyhow!(
+                "Could not find D30: Timeout occurred after {:?}",
+                time_limit
+            )),
+        }
     }
 }
