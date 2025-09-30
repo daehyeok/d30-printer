@@ -1,4 +1,4 @@
-name: "Build test"
+name: "Devenv test"
 
 on:
   pull_request:
@@ -19,9 +19,3 @@ jobs:
 
     - name: Build the devenv shell and run any pre-commit hooks
       run: devenv test
-
-    - name: Build
-      run: cargo build --verbose
-      
-    - name: Run tests
-      run: cargo test --verbose
