@@ -1,7 +1,13 @@
 [package]
 name = "d30-printer"
 version = "0.1.0"
+description = "Simple CLI tool for the Phomemo D30 label maker"
+homepage = "https://github.com/daehyeok/d30-printer"
+repository = "https://github.com/daehyeok/d30-printer"
+readme = "README.md"
+license-file = "LICENSE"
 edition = "2024"
+
 
 [dependencies]
 anyhow = "1.0.100"
