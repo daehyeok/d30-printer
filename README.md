@@ -2,7 +2,7 @@
 
 ## Description
 
-d30-printer is a simple command-line interface (CLI) for the Phomemo D30 label maker. This project is inspired by [crabdancing/phomemo-d30](https://github.com/crabdancing/phomemo-d30) and is designed to provide a cross-platform solution for users. 
+d30-printer is a simple command-line interface (CLI) for the Phomemo D30 label maker. This project is inspired by [crabdancing/phomemo-d30](https://github.com/crabdancing/phomemo-d30) and is designed to provide a cross-platform solution for users.
 
 ## Features
 
@@ -18,8 +18,9 @@ Arguments:
   <TEXT>  The text to be printed on the label
 
 Options:
-  -a, --addr <ADDR>  The MAC address of the D30 label maker. (Optional)
-  -f, --font <FONT>  The font name or the path to the font file. If not set, 'Hack' font will be used by default. (Optional)
-  -h, --help         Print help
-  -V, --version      Print version
+  -a, --addr <ADDR>            The MAC address of the D30 label maker. If not set, it will automatically scan for the D30. (Optional)
+  -f, --font <FONT>            The font name or the path to the font file. If not set, 'Hack' font will be used by default. (Optional)
+  -s, --scan-time <SCAN_TIME>  The timeout value for the Bluetooth scan, specified in seconds [default: 5]
+  -h, --help                   Print help
+  -V, --version                Print version
 ```
