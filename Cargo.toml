@@ -1,7 +1,7 @@
 [package]
 name = "d30-printer"
 version = "0.1.0"
-description = "Simple CLI tool for the Phomemo D30 label maker"
+description = "Simple cross-platform CLI tool for the Phomemo D30 label maker."
 homepage = "https://github.com/daehyeok/d30-printer"
 repository = "https://github.com/daehyeok/d30-printer"
 readme = "README.md"

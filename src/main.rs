@@ -28,9 +28,8 @@ async fn main() {
             use std::io::Write;
 
             let mut style = buf.style();
-            let msg = &format!("{}", record.args());
-            let msg = colored_level(&mut style, record.level(), msg);
-            writeln!(buf, "{}", msg,)
+            let level = colored_level(&mut style, record.level());
+            writeln!(buf, "[{}] {}", level, record.args())
         })
         .init();
 
@@ -41,16 +40,14 @@ async fn main() {
 }
 
 #[cfg(not(debug_assertions))]
-fn colored_level<'a>(style: &'a mut Style, level: Level, msg: &'a str) -> StyledValue<'a, &'a str> {
-    let color = match level {
-        Level::Trace => style.set_color(Color::Magenta),
-        Level::Debug => style.set_color(Color::Blue),
-        Level::Info => style.set_color(Color::Green),
-        Level::Warn => style.set_color(Color::Yellow),
-        Level::Error => style.set_color(Color::Red),
-    };
-
-    color.value(msg)
+fn colored_level<'a>(style: &'a mut Style, level: Level) -> StyledValue<'a, &'a str> {
+    match level {
+        Level::Trace => style.set_color(Color::Magenta).value("Trace"),
+        Level::Debug => style.set_color(Color::Blue).value("Debug"),
+        Level::Info => style.set_color(Color::Green).value("Info"),
+        Level::Warn => style.set_color(Color::Yellow).value("Warn"),
+        Level::Error => style.set_color(Color::Red).value("Error"),
+    }
 }
 
 async fn print(config: &Config) -> Result<()> {
