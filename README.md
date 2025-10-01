@@ -1,5 +1,7 @@
 # d30-printer
 
+[![crates.io](https://img.shields.io/crates/v/d30-printer.svg)](https://crates.io/crates/d30-printer)
+
 ## Description
 
 d30-printer is a simple command-line interface (CLI) for the Phomemo D30 label maker. This project is inspired by [crabdancing/phomemo-d30](https://github.com/crabdancing/phomemo-d30) and is designed to provide a cross-platform solution for users.
