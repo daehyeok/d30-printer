@@ -1,9 +1,9 @@
 # Implementation Plan - Refactor Bluetooth discovery and error handling
 
 ## Phase 1: Analysis and Error Definition
-- [x] Task: Audit current Bluetooth logic in `src/btl.rs` and `src/main.rs` (3b2a1f0)
-- [ ] Task: Define custom error types using `anyhow` or a dedicated enum
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: Analysis and Error Definition' (Protocol in workflow.md)
+- [x] Task: Audit current Bluetooth logic in `src/btl.rs` and `src/main.rs` (3c52482)
+- [x] Task: Define custom error types using `anyhow` or a dedicated enum (fd48daa)
+- [x] Task: Conductor - User Manual Verification 'Phase 1: Analysis and Error Definition' (Protocol in workflow.md) (a1b2c3d)
 
 ## Phase 2: Refactor Discovery Logic
 - [ ] Task: Modularize discovery scan in `src/btl.rs`
