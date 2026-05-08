@@ -3,7 +3,8 @@ use tokio::spawn;
 use tokio::time::timeout;
 
 use crate::config::Config;
-use anyhow::{Context, Result, anyhow};
+use crate::error::PrinterError;
+use anyhow::Result;
 use btleplug::api::{
     BDAddr, Central, CentralEvent, CharPropFlags, Characteristic, Manager as _, Peripheral as _,
     ScanFilter, WriteType,
@@ -20,127 +21,99 @@ impl D30 {
     pub async fn new(config: &Config) -> Result<Self> {
         let device = D30::find_device(config).await?;
 
-        if let Err(e) = device.connect().await.context("Connect to D30 Device.") {
-            return Err(anyhow!("Failed to connect to D30: {}", e));
-        }
+        device
+            .connect()
+            .await
+            .map_err(|e| PrinterError::ConnectionFailed(e.to_string()))?;
 
-        let characterics: Option<Characteristic> =
-            device.characteristics().into_iter().find(|chr| {
-                chr.properties == CharPropFlags::WRITE | CharPropFlags::WRITE_WITHOUT_RESPONSE
-            });
-
-        if characterics.is_none() {
-            return Err(anyhow!("Failed to find D30 Bluetooth characteristics."));
-        }
+        let characteristics = device.characteristics();
+        let characteristic = characteristics
+            .into_iter()
+            .find(|chr| {
+                chr.properties.contains(CharPropFlags::WRITE)
+                    || chr.properties.contains(CharPropFlags::WRITE_WITHOUT_RESPONSE)
+            })
+            .ok_or(PrinterError::CharacteristicNotFound)?;
 
         Ok(Self {
             device,
-            characteristic: characterics.unwrap(),
+            characteristic,
         })
     }
 
     pub async fn write(&self, data: &[u8]) -> Result<()> {
         self.device
             .write(&self.characteristic, data, WriteType::WithResponse)
-            .await?;
-        Ok(())
+            .await
+            .map_err(|e| PrinterError::CommunicationError(e.to_string()).into())
     }
 
     async fn d30_filter(p: &Peripheral, addr: &Option<BDAddr>) -> bool {
-        let properties_res = p.properties().await;
+        let properties = match p.properties().await {
+            Ok(Some(prop)) => prop,
+            _ => return false,
+        };
 
-        if let Err(e) = properties_res {
-            warn!(
-                "Error occured during get bluetooth device properties: {}",
-                e
-            );
-            return false;
-        }
-
-        let properties = properties_res.unwrap();
-        debug!("Found device: {:?}", properties);
-        if properties.is_none() {
-            return false;
-        }
-
-        let properties = properties.unwrap();
-
-        // If execution reaches here, result is Ok, and you can unwrap or expect the value
         let local_name = properties.local_name.unwrap_or_default();
         debug!("Found BLE device: {}, {:?}", local_name, properties.address);
 
         if let Some(d30_addr) = addr {
-            if properties.address == *d30_addr {
-                return true;
-            }
-        } else if local_name == "D30" {
-            return true;
+            properties.address == *d30_addr
+        } else {
+            local_name == "D30"
         }
-
-        false
     }
 
     async fn scan(central: Adapter, addr: Option<BDAddr>) -> Result<Peripheral> {
-        #[cfg(debug_assertions)]
-        {
-            let adapter = match central.adapter_info().await {
-                Ok(s) => s,
-                Err(e) => {
-                    debug!("Could not read adapter info: {:?}", e);
-                    "".to_string()
-                }
-            };
-            debug!("Scanning D30 from adapter: {:?}", adapter);
+        let mut events = central
+            .events()
+            .await
+            .map_err(|e| PrinterError::AdapterError(e.to_string()))?;
 
-            let central_state = central.adapter_state().await.unwrap();
-            debug!("CentralState: {:?}", central_state);
-        }
-
-        let mut events = central.events().await?;
         info!("Scanning Bluetooth devices");
-        central.start_scan(ScanFilter::default()).await?;
+        central
+            .start_scan(ScanFilter::default())
+            .await
+            .map_err(|e| PrinterError::AdapterError(e.to_string()))?;
 
         while let Some(event) = events.next().await {
-            match event {
-                CentralEvent::DeviceDiscovered(id) => {
-                    let peripheral = central.peripheral(&id).await?;
+            if let CentralEvent::DeviceDiscovered(id) = event {
+                if let Ok(peripheral) = central.peripheral(&id).await {
                     if D30::d30_filter(&peripheral, &addr).await {
-                        central.stop_scan().await?;
+                        let _ = central.stop_scan().await;
                         return Ok(peripheral);
                     }
                 }
-                _ => {}
             }
         }
 
-        central.stop_scan().await?;
-        Err(anyhow!("Could not find D30."))
+        let _ = central.stop_scan().await;
+        Err(PrinterError::DeviceNotFound.into())
     }
 
     async fn find_device(config: &Config) -> Result<Peripheral> {
-        let manager = Manager::new().await?;
-        info!("Searching for Bluetooth adapters");
-        let adapters = manager.adapters().await?;
+        let manager = Manager::new()
+            .await
+            .map_err(|e| PrinterError::AdapterError(e.to_string()))?;
 
-        if adapters.is_empty() {
-            return Err(anyhow!("Unable to find any adapters."));
-        }
+        let adapters = manager
+            .adapters()
+            .await
+            .map_err(|e| PrinterError::AdapterError(e.to_string()))?;
 
-        let adapter = adapters.into_iter().nth(0).unwrap();
+        let adapter = adapters
+            .into_iter()
+            .next()
+            .ok_or(PrinterError::NoAdapterFound)?;
 
-        let addr = config.get_addr()?;
+        let addr = config.get_addr().ok().flatten(); // Handle potential addr parse error gracefully
         let handle = spawn(async move { D30::scan(adapter, addr).await });
-        let time_limit = Duration::from_secs(5);
+        let time_limit = Duration::from_secs(config.scan_time.unwrap_or(5));
 
-        let d30 = timeout(time_limit, handle).await;
-        match d30 {
-            Ok(Ok(Ok(device))) => Ok(device),
-            Ok(Ok(Err(e))) => Err(e),
-            Ok(Err(join_error)) => Err(anyhow!("Task panicked or cancelled: {:?}", join_error)),
-            Err(_) => Err(anyhow!(
-                "Could not find D30: Timeout occurred after {:?}",
-                time_limit
-            )),
+        match timeout(time_limit, handle).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(join_error)) => Err(PrinterError::Other(format!("Task panicked: {:?}", join_error)).into()),
+            Err(_) => Err(PrinterError::DiscoveryTimeout.into()),
         }
     }
 }
