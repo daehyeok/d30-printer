@@ -1,6 +1,7 @@
+use crate::error::PrinterError;
 use anyhow::Result;
 use btleplug::api::BDAddr;
-use clap::{Parser, command};
+use clap::Parser;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -26,7 +27,8 @@ impl Config {
         match &self.addr {
             None => Ok(None),
             Some(addr) => {
-                let bd_addr = BDAddr::from_str_delim(addr)?;
+                let bd_addr = BDAddr::from_str_delim(addr)
+                    .map_err(|e| PrinterError::ConfigError(format!("Invalid MAC address: {}", e)))?;
                 Ok(Some(bd_addr))
             }
         }

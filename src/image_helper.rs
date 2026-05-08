@@ -3,7 +3,8 @@
 use std::path::Path;
 
 use crate::config::Config;
-use anyhow::{Context, Result, anyhow};
+use crate::error::PrinterError;
+use anyhow::Result;
 use image::{self, DynamicImage, ImageBuffer, Rgb};
 use log::trace;
 use rusttype::{Font, Scale};
@@ -18,8 +19,9 @@ pub fn generate_image(config: &Config) -> Result<DynamicImage> {
     let label_dimensions = Dimensions::new(320, 96);
     trace!("{:#?}", &label_dimensions);
 
-    let font = load_font(&config.font)?;
-    let font = Font::try_from_vec(font).context("Could not init font.")?;
+    let font_data = load_font(&config.font)?;
+    let font = Font::try_from_vec(font_data)
+        .ok_or_else(|| PrinterError::ImageError("Could not initialize font.".to_string()))?;
     let text = &config.text;
 
     //TODO - calcuate scale.
@@ -75,7 +77,6 @@ pub fn pack_image(image: &DynamicImage) -> Vec<u8> {
 
     let image = image.to_rgb8();
 
-    let mut output = Vec::new();
     for (x, y, pixel) in image.enumerate_pixels() {
         let (x, y) = (x as usize, y as usize);
 
@@ -86,11 +87,12 @@ pub fn pack_image(image: &DynamicImage) -> Vec<u8> {
         }
     }
 
+    let mut output = Vec::new();
     for bit_row in bit_grid {
-        for byte_num in 0..(image.width() / 8) {
+        for byte_num in 0..(width / 8) {
             let mut byte: u8 = 0;
             for bit_offset in 0..8 {
-                let pixel: u8 = bit_row[(byte_num * 8 + bit_offset) as usize];
+                let pixel: u8 = bit_row[byte_num * 8 + bit_offset];
                 // Raw bit manipulation iterates through 0 through 7, and bitshifts the micro-pixels onto a byte 'sandwich',
                 // before it gets shipped off to the D30 printer
                 byte |= (pixel & 0x01) << (7 - bit_offset);
@@ -106,9 +108,10 @@ pub fn pack_image(image: &DynamicImage) -> Vec<u8> {
 }
 
 fn read_font(font_name: &str) -> Result<Vec<u8>> {
-    let system_font = findfont::find(font_name);
-    if system_font.is_some() {
-        let res = std::fs::read(system_font.unwrap())?;
+    if let Some(path) = findfont::find(font_name) {
+        let res = std::fs::read(path).map_err(|e| {
+            PrinterError::ImageError(format!("Failed to read system font {}: {}", font_name, e))
+        })?;
         return Ok(res);
     }
 
@@ -117,10 +120,12 @@ fn read_font(font_name: &str) -> Result<Vec<u8>> {
 
     let path = Path::new(font_name);
     if !path.exists() {
-        return Err(anyhow!("Font does not exist: {:?}.", font_name));
+        return Err(PrinterError::ImageError(format!("Font does not exist: {:?}.", font_name)).into());
     }
 
-    let res = std::fs::read(system_font.unwrap())?;
+    let res = std::fs::read(path).map_err(|e| {
+        PrinterError::ImageError(format!("Failed to read font file {}: {}", font_name, e))
+    })?;
     Ok(res)
 }
 
