@@ -4,5 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [ ] **Track: Refactor Bluetooth discovery and error handling**
+- [x] **Track: Refactor Bluetooth discovery and error handling**
   *Link: [./tracks/bt_refactor_20260508/](./tracks/bt_refactor_20260508/)*
