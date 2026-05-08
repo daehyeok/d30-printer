@@ -9,6 +9,7 @@ use log::{Level, LevelFilter};
 
 mod btl;
 mod config;
+mod error;
 mod image_helper;
 
 extern crate pretty_env_logger;
