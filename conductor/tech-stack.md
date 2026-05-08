@@ -9,7 +9,8 @@
 ## Supporting Libraries
 - **Image & Imageproc:** Used for generating and manipulating the label images before they are sent to the printer.
 - **Rusttype & Findfont:** Handles font loading and glyph rendering into the label images.
-- **Anyhow:** Provides easy error management.
+- **Anyhow:** Provides easy error management and context.
+- **Thiserror:** Used for defining structured, domain-specific error types.
 - **Env_logger & Log:** Standard logging framework for diagnostics.
 
 ## Development Environment
