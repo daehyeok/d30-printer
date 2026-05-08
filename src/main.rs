@@ -36,7 +36,10 @@ async fn main() {
 
     let args = Config::parse();
     if let Err(e) = print(&args).await {
-        error!("Failed to print: {:?}", e);
+        error!("{}", e);
+        for cause in e.chain().skip(1) {
+            error!("  Caused by: {}", cause);
+        }
     }
 }
 
