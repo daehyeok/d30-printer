@@ -36,9 +36,9 @@ async fn main() {
 
     let args = Config::parse();
     if let Err(e) = print(&args).await {
-        error!("{}", e);
+        error!("❌ {}", e);
         for cause in e.chain().skip(1) {
-            error!("  Caused by: {}", cause);
+            error!("   ╰─▶ 💡 {}", cause);
         }
     }
 }
@@ -70,5 +70,6 @@ async fn print(config: &Config) -> Result<()> {
         output.clear();
     }
 
+    info!("✅ Print job sent successfully!");
     Ok(())
 }

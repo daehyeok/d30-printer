@@ -70,7 +70,7 @@ impl D30 {
             .await
             .map_err(|e| PrinterError::AdapterError(e.to_string()))?;
 
-        info!("Scanning Bluetooth devices");
+        info!("🔍 Scanning for Phomemo D30...");
         central
             .start_scan(ScanFilter::default())
             .await
@@ -80,6 +80,7 @@ impl D30 {
             if let CentralEvent::DeviceDiscovered(id) = event {
                 if let Ok(peripheral) = central.peripheral(&id).await {
                     if D30::d30_filter(&peripheral, &addr).await {
+                        info!("✨ Found D30!");
                         let _ = central.stop_scan().await;
                         return Ok(peripheral);
                     }
